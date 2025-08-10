@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>고3 수학 모의고사 응시 시스템 (개선판)</title>
+    <title>고3 수학 모의고사 응시 시스템(25.08.11)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -475,7 +475,6 @@
                 return;
             }
             try {
-                // CORS 정책으로 인해 응답을 직접 읽을 수 없으므로 no-cors 모드 사용
                 await fetch(Config.APPS_SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors', 
@@ -633,6 +632,9 @@
                 const idDigits = State.currentExamData.studentId.split('');
                 DOM.studentIdInputs.forEach((input, index) => input.value = idDigits[index] || '');
             }
+            if (State.currentExamData.subject) {
+                DOM.subjectSelect.value = State.currentExamData.subject;
+            }
 
             Object.entries(State.userAnswers).forEach(([q, ans]) => {
                 if (q >= 16 && q <= 22 || q >= 29 && q <= 30) {
@@ -666,8 +668,8 @@
             userInfoSummary.innerHTML = `
                 <h3 class="text-lg font-semibold mb-2">응시자 정보</h3>
                 <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <p><strong>성명:</strong> ${name || '미입력'}</p>
-                    <p><strong>수험번호:</strong> ${studentId || '미입력'}</p>
+                    <p><strong>성명:</strong> ${name.trim() || '미입력'}</p>
+                    <p><strong>수험번호:</strong> ${studentId.trim() || '미입력'}</p>
                     <p><strong>선택과목:</strong> ${subject || '미선택'}</p>
                     <p><strong>타이머:</strong> ${timerSetting || '미설정'}</p>
                 </div>
@@ -722,7 +724,28 @@
         addEventListeners() {
             DOM.startExamBtn.addEventListener('click', () => this.prepareExam());
             DOM.timerCheckbox.addEventListener('change', () => DOM.timerSetting.classList.toggle('hidden', !DOM.timerCheckbox.checked));
-            DOM.subjectSelect.addEventListener('change', () => this.populateCorrectAnswers());
+            
+            DOM.subjectSelect.addEventListener('change', () => {
+                this.populateCorrectAnswers();
+                State.save();
+            });
+
+            DOM.studentNameInput.addEventListener('input', (e) => {
+                if(State.currentExamData) {
+                    State.currentExamData.name = e.target.value;
+                    State.save();
+                }
+            });
+
+            DOM.studentIdInputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    if (State.currentExamData) {
+                        State.currentExamData.studentId = Array.from(DOM.studentIdInputs).map(i => i.value).join('');
+                        State.save();
+                    }
+                });
+            });
+
             DOM.submitBtn.addEventListener('click', () => UI.showModal('답안을 제출하시겠습니까?', true, () => this.submitExam()));
             
             DOM.examScreen.addEventListener('click', (e) => {
@@ -775,8 +798,10 @@
         startExam(examData, isResuming = false) {
             State.currentExamData = examData;
             
-            State.currentExamData.name = DOM.studentNameInput.value;
-            State.currentExamData.studentId = Array.from(DOM.studentIdInputs).map(input => input.value).join('');
+            if (!isResuming) {
+                State.currentExamData.name = DOM.studentNameInput.value;
+                State.currentExamData.studentId = Array.from(DOM.studentIdInputs).map(input => input.value).join('');
+            }
             State.currentExamData.timerSetting = DOM.timerCheckbox.checked ? `${DOM.timerMinutesInput.value}분` : '미설정';
 
             this.populateCorrectAnswers();
@@ -786,7 +811,6 @@
             
             if (isResuming) {
                 UI.renderUserAnswers();
-                DOM.subjectSelect.value = examData.subject;
             } else {
                 State.userAnswers = {};
             }
