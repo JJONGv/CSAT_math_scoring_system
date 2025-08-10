@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>고3 수학 모의고사 응시 시스템(25.08.11)</title>
+    <title>고3 수학 모의고사 응시 시스템 (개선판)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -726,8 +726,10 @@
             DOM.timerCheckbox.addEventListener('change', () => DOM.timerSetting.classList.toggle('hidden', !DOM.timerCheckbox.checked));
             
             DOM.subjectSelect.addEventListener('change', () => {
-                this.populateCorrectAnswers();
-                State.save();
+                if (State.currentExamData) {
+                    this.populateCorrectAnswers();
+                    State.save();
+                }
             });
 
             DOM.studentNameInput.addEventListener('input', (e) => {
@@ -798,31 +800,46 @@
         startExam(examData, isResuming = false) {
             State.currentExamData = examData;
             
-            if (!isResuming) {
+            if (isResuming) {
+                // 1. Restore all UI elements from the loaded state first.
+                UI.renderUserAnswers(); 
+            } else {
+                // 2. For a new exam, capture the initial state from the UI.
                 State.currentExamData.name = DOM.studentNameInput.value;
                 State.currentExamData.studentId = Array.from(DOM.studentIdInputs).map(input => input.value).join('');
+                State.currentExamData.timerSetting = DOM.timerCheckbox.checked ? `${DOM.timerMinutesInput.value}분` : '미설정';
+                State.userAnswers = {}; // Clear answers for a new exam.
             }
-            State.currentExamData.timerSetting = DOM.timerCheckbox.checked ? `${DOM.timerMinutesInput.value}분` : '미설정';
 
-            this.populateCorrectAnswers();
+            // 3. Populate correct answers based on the (now correct) subject selection.
+            this.populateCorrectAnswers(); 
 
+            // 4. Set up the exam screen display.
             DOM.examTitle.textContent = examData.examName;
             DOM.handwritingPhrase.textContent = examData.handwritingPhrase;
-            
-            if (isResuming) {
-                UI.renderUserAnswers();
-            } else {
-                State.userAnswers = {};
-            }
-
             DOM.startScreen.classList.add('hidden');
             DOM.examScreen.classList.remove('hidden');
 
-            if (DOM.timerCheckbox.checked || isResuming && State.timeRemaining !== null) {
+            // 5. Handle the timer logic.
+            const timerWasSet = State.currentExamData.timerSetting !== '미설정';
+            if (timerWasSet) {
                 DOM.timerDisplay.classList.remove('hidden');
                 
-                let initialTime = isResuming ? State.timeRemaining : parseInt(DOM.timerMinutesInput.value) * 60;
-                State.timeRemaining = initialTime;
+                // Restore the visual state of the timer controls
+                DOM.timerCheckbox.checked = true;
+                DOM.timerSetting.classList.remove('hidden');
+                const minutes = State.currentExamData.timerSetting.replace('분', '');
+                if (!isNaN(minutes)) {
+                    DOM.timerMinutesInput.value = minutes;
+                }
+
+                let initialTime;
+                if (isResuming && State.timeRemaining !== null) {
+                    initialTime = State.timeRemaining;
+                } else {
+                    initialTime = parseInt(DOM.timerMinutesInput.value) * 60;
+                    State.timeRemaining = initialTime;
+                }
 
                 UI.updateTimerDisplay(initialTime);
                 State.timerInterval = setInterval(() => {
@@ -835,6 +852,8 @@
                     }
                 }, 1000);
             }
+            
+            // 6. Save the complete initial state.
             State.save();
         },
 
