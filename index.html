@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>고3 수학 모의고사 응시 시스템(Ver.250811.02)</title>
+    <title>고3 수학 모의고사 응시 시스템 (개선판)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -210,9 +210,7 @@
                     <div class="font-bold bg-gray-100 p-2 text-center border-b border-gray-400 md:border-b-0">선택 과목</div>
                     <div class="p-1 flex-grow">
                         <select id="subject-select" class="w-full h-full text-center border-0 focus:ring-0 bg-transparent text-base">
-                            <option value="확률과 통계">확률과 통계</option>
-                            <option value="미적분">미적분</option>
-                            <option value="기하">기하</option>
+                            <!-- JS로 동적 생성 -->
                         </select>
                     </div>
                 </div>
@@ -446,13 +444,28 @@
                 const examCsvText = await this.readCsvBlob(await examResponse.blob());
                 const examRows = examCsvText.trim().replace(/\r/g, "").split('\n').map(row => row.split(',').map(cell => cell.trim().replace(/^"|"$/g, '')));
                 
+                const availableSubjects = [];
+                // F11 -> [10][5] for "확률과 통계"
+                if (examRows[10] && examRows[10][5] === 'O') {
+                    availableSubjects.push('확률과 통계');
+                }
+                // I11 -> [10][8] for "미적분"
+                if (examRows[10] && examRows[10][8] === 'O') {
+                    availableSubjects.push('미적분');
+                }
+                // L11 -> [10][11] for "기하"
+                if (examRows[10] && examRows[10][11] === 'O') {
+                    availableSubjects.push('기하');
+                }
+
                 return {
                     examName: examRows[25][2],
                     handwritingPhrase: examRows[26][2],
                     rawRows: examRows,
                     year,
                     code,
-                    gid: examGid
+                    gid: examGid,
+                    availableSubjects: availableSubjects
                 };
             } catch (error) {
                 console.error('시험 데이터 불러오기 실패:', error);
@@ -582,6 +595,23 @@
 
         createShortAnswerQuestionForElective(qNum) {
             return `<tr class="border-t-2 border-gray-300"><td>${this.createShortAnswerItem(qNum)}</td></tr>`;
+        },
+        
+        populateSubjectDropdown(subjects) {
+            DOM.subjectSelect.innerHTML = '';
+            if (subjects && subjects.length > 0) {
+                subjects.forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject;
+                    option.textContent = subject;
+                    DOM.subjectSelect.appendChild(option);
+                });
+            } else {
+                const option = document.createElement('option');
+                option.textContent = '선택 가능한 과목 없음';
+                option.disabled = true;
+                DOM.subjectSelect.appendChild(option);
+            }
         },
 
         showModal(text, showCancel = true, onConfirm) {
@@ -800,32 +830,28 @@
         startExam(examData, isResuming = false) {
             State.currentExamData = examData;
             
+            UI.populateSubjectDropdown(examData.availableSubjects);
+
             if (isResuming) {
-                // 1. Restore all UI elements from the loaded state first.
                 UI.renderUserAnswers(); 
             } else {
-                // 2. For a new exam, capture the initial state from the UI.
                 State.currentExamData.name = DOM.studentNameInput.value;
                 State.currentExamData.studentId = Array.from(DOM.studentIdInputs).map(input => input.value).join('');
                 State.currentExamData.timerSetting = DOM.timerCheckbox.checked ? `${DOM.timerMinutesInput.value}분` : '미설정';
-                State.userAnswers = {}; // Clear answers for a new exam.
+                State.userAnswers = {};
             }
 
-            // 3. Populate correct answers based on the (now correct) subject selection.
             this.populateCorrectAnswers(); 
 
-            // 4. Set up the exam screen display.
             DOM.examTitle.textContent = examData.examName;
             DOM.handwritingPhrase.textContent = examData.handwritingPhrase;
             DOM.startScreen.classList.add('hidden');
             DOM.examScreen.classList.remove('hidden');
 
-            // 5. Handle the timer logic.
             const timerWasSet = State.currentExamData.timerSetting !== '미설정';
             if (timerWasSet) {
                 DOM.timerDisplay.classList.remove('hidden');
                 
-                // Restore the visual state of the timer controls
                 DOM.timerCheckbox.checked = true;
                 DOM.timerSetting.classList.remove('hidden');
                 const minutes = State.currentExamData.timerSetting.replace('분', '');
@@ -853,7 +879,6 @@
                 }, 1000);
             }
             
-            // 6. Save the complete initial state.
             State.save();
         },
 
@@ -937,5 +962,3 @@
 </script>
 </body>
 </html>
-
-
